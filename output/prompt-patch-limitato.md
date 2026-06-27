@@ -29,9 +29,18 @@ Usa questi input:
 Applica solo il primo slice approvato:
 Implementare il backend minimo per `POST /api/tickets`: il server riceve `{title, description, priority}`,
 valida i campi (title e description non vuoti, priority in {low, medium, high}), genera un `id`, salva il ticket
-nell'array in memoria e risponde con `{id, title, description, priority}`.
-Nessuna modifica frontend. Il nuovo ticket e' verificabile via `GET /api/tickets` e appare nell'elenco
-esistente senza toccare UI.
+nell'array in memoria con `status: "open"` (necessario per il filtro GET esistente) e risponde
+con `{id, title, description, priority}`.
+Allinea `allowedPriorities` in `server/data/tickets.js` da `["Alta","Media","Bassa"]` a `["low","medium","high"]`.
+Nessuna modifica frontend ne' CSS (i badge priorita' nuovi resteranno senza colore — scelta consapevole).
+Il nuovo ticket e' verificabile via `GET /api/tickets` (compare grazie a `status: "open"`) e appare
+nell'elenco esistente senza toccare UI.
+
+Rischio noto: TicketCard.jsx chiama `new Date(ticket.updatedAt)` — se `updatedAt` e' `undefined`
+(assente dal contract sketch), `Intl.DateTimeFormat().format()` lancia `RangeError` e la UI crasha.
+Anche il campo `customer` sara' assente. Decisione: crash accettato per questo slice (backend-only).
+La mitigazione (fallback su data corrente o rimozione condizionale) e' rinviata a uno slice successivo.
+Il test manuale deve verificare l'assenza di crash nella lista ticket dopo una POST valida.
 
 File o aree ammesse:
 - server/index.js
@@ -55,7 +64,7 @@ Non aggiungere:
 - migration;
 - redesign;
 - refactor generale;
-- campi extra oltre a title, description, priority (es. assegnatario, categoria, stato, area);
+- campi extra come payload utente oltre a title, description, priority (es. assegnatario, categoria, area); status="open" e' generato dal sistema per compatibilita' col filtro GET esistente;
 - pagine o componenti UI aggiuntivi;
 - persistenza complessa (database, backend dedicato).
 
@@ -95,7 +104,9 @@ POST /api/tickets con {"title":"Test","description":"","priority":"low"}
 POST /api/tickets con {"title":"Test","description":"ok","priority":"urgentissimo"}
 → atteso 400 con {"error":"PRIORITY_INVALID"}
 
-GET /api/tickets → l'array contiene il nuovo ticket creato
+GET /api/tickets → l'array contiene il nuovo ticket creato con `status: "open"`
+
+GET /api/ticket-options → `priorities` restituisce `["low","medium","high"]`
 
 Confronto visivo con screenshot pre-modifica: nessuna differenza di layout/stile.
 Navigazione nell'app: elenco, dettaglio e flussi esistenti funzionano come prima.

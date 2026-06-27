@@ -43,11 +43,11 @@ Diventa candidato solo se:
 | File / area | Suggerito da | Evidenza verificata | Stato |
 | --- | --- | --- | --- |
 | server/index.js | repo | Righe 26-31: stub `POST /api/tickets` con 501 "primo slice da implementare nel Lab 08". Il contract sketch definisce payload valido, risposta di successo ed errori (`TITLE_REQUIRED`, `DESCRIPTION_REQUIRED`, `PRIORITY_INVALID`). L'issue L05 richiede validazione campi e salvataggio in memoria. | ammesso |
-| server/data/tickets.js | repo | Esporta array `tickets[]` con 3 fixture e `allowedPriorities` = `["Alta", "Media", "Bassa"]`. Il data sketch classifica `id` come generato, `title/description/priority` come accettati. Il nuovo ticket va inserito in questo array. Discrepanza: l'issue L05 usa valori `{low, medium, high}`, la codebase usa italiano. | ammesso |
+| server/data/tickets.js | repo | Esporta array `tickets[]` con 3 fixture e `allowedPriorities` = `["Alta", "Media", "Bassa"]`. Il data sketch classifica `id` come generato, `title/description/priority` come accettati. Il nuovo ticket va inserito in questo array. Deciso: si allinea `allowedPriorities` a `["low","medium","high"]` per rispettare il contract; i fixture esistenti restano in italiano come dati storici. | ammesso |
 | src/api.js | repo | Espone solo `fetchOpenTickets()` per GET `/api/tickets`. Manca una funzione `createTicket()` per la POST, richiesta dal contract sketch. | dubbio |
 | src/App.jsx | repo | Gestisce stato `tickets[]`, `status`, `error`. L'issue L05 richiede che il nuovo ticket compaia nell'elenco pre-esistente. Se lo slice e' solo backend, nessuna modifica necessaria. | dubbio |
-| src/components/TicketCard.jsx | repo | Renderizza `ticket.id`, `ticket.priority`, `ticket.title`, `ticket.customer`, `ticket.updatedAt`. Il contract sketch prevede risposta con solo `{id, title, description, priority}` -- `customer` e `updatedAt` non sono nel contratto. | dubbio |
-| src/components/TicketList.jsx | repo | Riceve `tickets[]` prop e mappa su `<TicketCard>`. L'issue L05 richiede che il nuovo ticket compaia nell'elenco. Il componente non richiede modifiche: funziona con qualsiasi array. Solo verifica. | ammesso |
+| src/components/TicketCard.jsx | repo | Renderizza `ticket.id`, `ticket.priority`, `ticket.title`, `ticket.customer`, `ticket.updatedAt`. Il contract sketch prevede risposta con solo `{id, title, description, priority}` -- `customer` e `updatedAt` non sono nel contratto. Rischio runtime: `new Date(ticket.updatedAt)` lancia `RangeError` se `updatedAt` e' `undefined` per i nuovi ticket. Il `customer` sara' vuoto/non renderizzato. Decisione: rischio accettato per questo slice; il crash va mitigato con un fallback in uno slice successivo. | dubbio |
+| src/components/TicketList.jsx | repo | Riceve `tickets[]` prop e mappa su `<TicketCard>`. L'issue L05 richiede che il nuovo ticket compaia nell'elenco. Il componente non richiede modifiche: funziona con qualsiasi array. Solo verifica. Nessuna modifica codice. | vietato |
 | src/styles.css | repo | Stili per `.ticket-card`, `.ticket-card__priority--alta/media/bassa`. Nessuno stile per form. Se lo slice e' backend-only, nessun ruolo. | vietato |
 | src/main.jsx | repo | Boilerplate: monta `<StrictMode><App /></StrictMode>`. Nessun ruolo collegato al create ticket. | vietato |
 | index.html | repo | Shell HTML statica con `<div id="root">`. Nessun ruolo collegato al create ticket. | vietato |
@@ -56,22 +56,32 @@ Diventa candidato solo se:
 
 - server/index.js
 - server/data/tickets.js
-- src/components/TicketList.jsx
 
 ## File Vietati O Fuori Scope
 
 - src/styles.css - Non necessario per slice backend-only; nessuno stile form da aggiungere
 - src/main.jsx - Boilerplate React senza ruolo nel task
 - index.html - Shell statica senza ruolo nel task
+- src/components/TicketList.jsx - Nessuna modifica codice, solo verifica del rendering con nuovi ticket
 
 ## Primo Slice Proposto
 
 ```txt
 Implementare il backend minimo per `POST /api/tickets`: il server riceve `{title, description, priority}`,
-valida i campi (title e description non vuoti, priority in {validi}), genera un `id`, salva il ticket
-nell'array in memoria e risponde con `{id, title, description, priority}`.
-Nessuna modifica frontend. Il nuovo ticket e' verificabile via `GET /api/tickets` e appare nell'elenco
-esistente senza toccare UI.
+valida i campi (title e description non vuoti, priority in {low, medium, high}), genera un `id`,
+salva il ticket nell'array in memoria con `status: "open"` (necessario per passare il filtro
+GET esistente) e risponde con `{id, title, description, priority}`.
+Si allinea `allowedPriorities` da `["Alta","Media","Bassa"]` a `["low","medium","high"]`.
+Nessuna modifica frontend ne' CSS. I badge priorita' dei nuovi ticket resteranno senza colore
+(le classi CSS `--alta/--media/--bassa` non coprono i valori inglesi — scelta consapevole).
+Il nuovo ticket e' verificabile via `GET /api/tickets` (compare grazie a `status: "open"`) e
+appare nell'elenco esistente senza toccare UI.
+
+Rischio noto: TicketCard.jsx chiama `new Date(ticket.updatedAt)` — se `updatedAt` e' `undefined` (assente
+dal contract sketch), `Intl.DateTimeFormat().format()` lancia `RangeError` e la UI crasha. Anche il campo
+`customer` sara' assente. Decisione: crash accettato per questo slice (backend-only). La mitigazione
+(fallback su data corrente o rimozione condizionale del rendering) e' rinviata a uno slice successivo
+che tocchi il frontend. Il piano lo dichiara esplicitamente per evitare sorprese in fase di test manuale.
 ```
 
 ## Perche' Questo Slice E' Piccolo
@@ -96,5 +106,7 @@ POST /api/tickets con {"title":"Test","description":"","priority":"low"}
 POST /api/tickets con {"title":"Test","description":"ok","priority":"urgentissimo"}
 → atteso 400 con {"error":"PRIORITY_INVALID"}
 
-GET /api/tickets → l'array contiene il nuovo ticket creato
+GET /api/tickets → l'array contiene il nuovo ticket creato con `status: "open"`
+
+GET /api/ticket-options → `priorities` restituisce `["low","medium","high"]`
 ```
